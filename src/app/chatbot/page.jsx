@@ -5,6 +5,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Cookies from "js-cookie";
 import axios from "axios";
+import Navigation from "@/components/Navigation";
 
 function ChevronIcon({ up }) {
   return up ? (
@@ -343,9 +344,11 @@ export default function ChatbotChartPage() {
       : departmentQuestions[currentIndex];
 
   return (
-    <div className="flex min-h-screen bg-white">
-      <div className="flex-1 p-8 overflow-auto border-r border-gray-300">
-        <h1 className="text-2xl font-bold mb-4">Organization Chart</h1>
+    <div className="flex min-h-screen bg-white flex-col">
+      <Navigation />
+      <div className="flex flex-1">
+        <div className="flex-1 p-8 overflow-auto border-r border-gray-300">
+          <h1 className="text-2xl font-bold mb-4">Organization Chart</h1>
         {!chatbotData ? (
           <p>
             No organization data yet. Please create organization via chatbot.
@@ -543,6 +546,7 @@ export default function ChatbotChartPage() {
             </button>
           </form>
         )}
+      </div>
       </div>
     </div>
   );

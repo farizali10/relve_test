@@ -7,6 +7,7 @@ import { getOrganization } from "@/redux/action/org";
 import { Button } from "@/components/ui/button";
 import Cookies from "js-cookie";
 import { logoutSuccess } from "@/redux/reducer/userReducer";
+import Navigation from "@/components/Navigation";
 
 export default function ChartPage() {
   const dispatch = useDispatch();
@@ -54,13 +55,12 @@ export default function ChartPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-8 bg-white">
-      <div className="flex justify-between items-center w-full max-w-md mb-6">
-        <h1 className="text-3xl font-bold">Organization Details</h1>
-        <Button variant="destructive" onClick={logoutHandler}>
-          Logout
-        </Button>
-      </div>
+    <div className="min-h-screen flex flex-col bg-white">
+      <Navigation />
+      <div className="flex flex-col items-center justify-center p-8 flex-1">
+        <div className="flex justify-between items-center w-full max-w-md mb-6">
+          <h1 className="text-3xl font-bold">Organization Details</h1>
+        </div>
 
       <div className="border border-gray-300 rounded-lg p-6 w-full max-w-md text-center shadow-md bg-gray-50">
         <div className="text-2xl font-semibold">
