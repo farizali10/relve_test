@@ -1,6 +1,7 @@
 import { connectDb } from "@/connectDb";
 import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
+import axios from "axios";
 import { BusinessStrategy } from "../../../../models/BusinessStrategy";
 import { Chatbot } from "../../../../models/Chatbot";
 import { Organization } from "../../../../models/Organization";
@@ -606,8 +607,29 @@ export async function POST(request) {
       });
     }
     
-    // Extract the actual value from natural language responses
-    const extractedValue = extractValueFromResponse(dataType, value);
+    // Use AI to extract the actual value from natural language responses
+    let extractedValue;
+    
+    try {
+      // Call the AI extraction endpoint
+      const extractionResponse = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL || ''}/api/extract-data`,
+        { dataType, userResponse: value },
+        {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          }
+        }
+      );
+      
+      extractedValue = extractionResponse.data.extractedData;
+      console.log("AI extracted data:", extractedValue);
+    } catch (extractionError) {
+      console.error("Error using AI extraction:", extractionError);
+      // Fall back to regex extraction if AI extraction fails
+      extractedValue = extractValueFromResponse(dataType, value);
+    }
 
     // Find or create the business strategy document
     let strategyData = await BusinessStrategy.findOne({ user: userId });
