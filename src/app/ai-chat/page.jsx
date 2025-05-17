@@ -59,13 +59,40 @@ export default function AIChatPage() {
         // Start the guided data collection process
         startDataCollection(data.missingData[0]);
       } else {
-        // All data is present, show welcome message
-        setMessages([
-          {
-            from: "bot",
-            text: "Hello! I'm your AI assistant. Ask me anything about your company, and I'll try to help you understand the organization better.",
-          },
-        ]);
+        // Check if business strategy data is needed
+        try {
+          const strategyResponse = await axios.get("/api/business-strategy", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          
+          if (strategyResponse.data.hasOrganizationData && 
+              strategyResponse.data.missingData && 
+              strategyResponse.data.missingData.length > 0) {
+            // We have organization data but need business strategy data
+            setDataCollectionMode(true);
+            setCurrentQuestion(strategyResponse.data.missingData[0]);
+            
+            // Start business strategy data collection
+            startBusinessStrategyCollection(strategyResponse.data.missingData[0]);
+          } else {
+            // All data is present, show welcome message
+            setMessages([
+              {
+                from: "bot",
+                text: "Hello! I'm your AI assistant. Ask me anything about your company, and I'll try to help you understand the organization better and identify potential gaps that might prevent you from reaching your business goals.",
+              },
+            ]);
+          }
+        } catch (strategyError) {
+          console.error("Error checking business strategy data:", strategyError);
+          // All basic data is present, show welcome message
+          setMessages([
+            {
+              from: "bot",
+              text: "Hello! I'm your AI assistant. Ask me anything about your company, and I'll try to help you understand the organization better.",
+            },
+          ]);
+        }
       }
     } catch (error) {
       console.error("Error checking required data:", error);
@@ -205,6 +232,95 @@ export default function AIChatPage() {
     }
   };
 
+  // Function to start business strategy data collection
+  const startBusinessStrategyCollection = (dataType) => {
+    setCurrentQuestion(dataType);
+    
+    let questionText = "";
+    switch (dataType) {
+      case "organizationProblems":
+        questionText = "To help me better understand your organization, could you define your top 3 organizational problems? This will help ground my analysis in your real business context.";
+        break;
+      case "userStrategy":
+        questionText = "Please tell me about your User & Organizational Strategy. Who are your target segments and what are your growth plans?";
+        break;
+      case "valueProposition":
+        questionText = "What is your organization's Unique Value Proposition (UVP)? This helps me understand what makes your company different.";
+        break;
+      case "solutionStrategy":
+        questionText = "Please describe your Solution and Distribution Strategy. How do you market and roll out initiatives?";
+        break;
+      case "managementStrategy":
+        questionText = "What is your high-level Management & Systems Strategy? This includes tools, processes, and governance structures.";
+        break;
+      case "businessOutcomes":
+        questionText = "What are your key business outcomes? This could include revenue targets, time-to-hire goals, and retention objectives.";
+        break;
+      case "costStructure":
+        questionText = "Please tell me about your Cost Structure constraints, such as budget per department and headcount caps.";
+        break;
+      case "peopleStrategy":
+        questionText = "What is your People Strategy? This includes critical roles, skill priorities, and bench strength.";
+        break;
+      default:
+        questionText = "I need more information about your business strategy. What would you like to tell me?";
+    }
+    
+    setMessages([
+      {
+        from: "bot",
+        text: questionText,
+      },
+    ]);
+  };
+
+  // Function to process collected business strategy data
+  const processBusinessStrategyData = async (dataType, value) => {
+    try {
+      const token = Cookies.get("token");
+      await axios.post(
+        "/api/business-strategy",
+        { dataType, value },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      
+      // Check if we need to collect more strategy data
+      const { data } = await axios.get("/api/business-strategy", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      if (data.missingData && data.missingData.length > 0) {
+        // Continue collecting data
+        const nextDataType = data.missingData[0];
+        setCurrentQuestion(nextDataType);
+        
+        // Ask the next question
+        startBusinessStrategyCollection(nextDataType);
+      } else {
+        // All data has been collected
+        setDataCollectionMode(false);
+        setMessages((prev) => [
+          ...prev,
+          {
+            from: "bot",
+            text: "Thank you for providing all the business strategy information! Now I can better assist you with questions about your organization and help identify potential gaps that might prevent you from reaching your business goals. What would you like to know?",
+          },
+        ]);
+      }
+    } catch (error) {
+      console.error("Error saving business strategy data:", error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          from: "bot",
+          text: "I had trouble saving that information. Could you please try again?",
+        },
+      ]);
+    }
+  };
+
   // Helper function to get missing data types
   const getMissingDataTypes = (requirements) => {
     const missingTypes = [];
@@ -244,6 +360,20 @@ export default function AIChatPage() {
       // We're in data collection mode, process the input as data
       const response = userInput.trim();
       
+      // Check if we're collecting business strategy data
+      const businessStrategyDataTypes = [
+        "organizationProblems", "userStrategy", "valueProposition", 
+        "solutionStrategy", "managementStrategy", "businessOutcomes", 
+        "costStructure", "peopleStrategy"
+      ];
+      
+      if (businessStrategyDataTypes.includes(currentQuestion)) {
+        // Process business strategy data
+        await processBusinessStrategyData(currentQuestion, response);
+        setLoading(false);
+        return;
+      }
+      
       // If the user is adding departments and types "done", move to the next data type
       if (currentQuestion === "departments" && response.toLowerCase() === "done" && dataRequirements.departments.length > 0) {
         const missingData = getMissingDataTypes(dataRequirements);
@@ -276,15 +406,43 @@ export default function AIChatPage() {
             },
           ]);
         } else {
-          // All data has been collected
-          setDataCollectionMode(false);
-          setMessages((prev) => [
-            ...prev,
-            {
-              from: "bot",
-              text: "Thank you for providing all the necessary information! Now I can better assist you with questions about your organization. What would you like to know?",
-            },
-          ]);
+          // All basic data has been collected, check if we need business strategy data
+          try {
+            const token = Cookies.get("token");
+            const strategyResponse = await axios.get("/api/business-strategy", {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            
+            if (strategyResponse.data.hasOrganizationData && 
+                strategyResponse.data.missingData && 
+                strategyResponse.data.missingData.length > 0) {
+              // We need to collect business strategy data
+              const firstMissingType = strategyResponse.data.missingData[0];
+              setCurrentQuestion(firstMissingType);
+              startBusinessStrategyCollection(firstMissingType);
+            } else {
+              // All data has been collected
+              setDataCollectionMode(false);
+              setMessages((prev) => [
+                ...prev,
+                {
+                  from: "bot",
+                  text: "Thank you for providing all the necessary information! Now I can better assist you with questions about your organization. What would you like to know?",
+                },
+              ]);
+            }
+          } catch (error) {
+            console.error("Error checking business strategy data:", error);
+            // All basic data has been collected
+            setDataCollectionMode(false);
+            setMessages((prev) => [
+              ...prev,
+              {
+                from: "bot",
+                text: "Thank you for providing all the necessary information! Now I can better assist you with questions about your organization. What would you like to know?",
+              },
+            ]);
+          }
         }
       } else {
         // Process the collected data
@@ -293,9 +451,37 @@ export default function AIChatPage() {
       
       setLoading(false);
     } else {
-      // Normal question mode
+      // Before allowing normal questions, check if business strategy data is complete
       try {
         const token = Cookies.get("token");
+        
+        // Check if we need to collect business strategy data first
+        const strategyResponse = await axios.get("/api/business-strategy", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        
+        if (strategyResponse.data.hasOrganizationData && 
+            strategyResponse.data.missingData && 
+            strategyResponse.data.missingData.length > 0) {
+          // We need to collect business strategy data first
+          setDataCollectionMode(true);
+          const firstMissingType = strategyResponse.data.missingData[0];
+          setCurrentQuestion(firstMissingType);
+          
+          setMessages((prev) => [
+            ...prev,
+            {
+              from: "bot",
+              text: "Before I can answer your questions, I need some additional information about your business strategy.",
+            },
+          ]);
+          
+          startBusinessStrategyCollection(firstMissingType);
+          setLoading(false);
+          return;
+        }
+        
+        // If business strategy data is complete, proceed with normal question mode
         const { data } = await axios.post(
           "/api/ai-chat",
           { question: userInput },
@@ -313,8 +499,40 @@ export default function AIChatPage() {
           },
         ]);
       } catch (error) {
-        // If the error indicates missing data, switch to data collection mode
-        if (error.response?.status === 404 && error.response?.data?.missingData) {
+        // If the error indicates missing business strategy data
+        if (error.response?.status === 400 && error.response?.data?.missingBusinessStrategyData) {
+          setDataCollectionMode(true);
+          setMessages((prev) => [
+            ...prev,
+            {
+              from: "bot",
+              text: error.response?.data?.message || "Before I can answer your questions, I need more information about your business strategy.",
+            },
+          ]);
+          
+          // Start business strategy data collection with the first missing data type
+          if (error.response?.data?.missingBusinessStrategyData.length > 0) {
+            // Map the API's missing data types to our business strategy data collection fields
+            const businessStrategyMapping = {
+              "organizational problems": "organizationProblems",
+              "user & organizational strategy": "userStrategy",
+              "unique value proposition": "valueProposition",
+              "solution & distribution strategy": "solutionStrategy",
+              "management & systems strategy": "managementStrategy",
+              "business outcomes": "businessOutcomes",
+              "cost structure": "costStructure",
+              "people strategy": "peopleStrategy"
+            };
+            
+            const firstMissingType = error.response.data.missingBusinessStrategyData[0];
+            const businessStrategyField = businessStrategyMapping[firstMissingType] || "organizationProblems";
+            
+            setCurrentQuestion(businessStrategyField);
+            startBusinessStrategyCollection(businessStrategyField);
+          }
+        }
+        // If the error indicates missing organization data, switch to organization data collection mode
+        else if (error.response?.status === 404 && error.response?.data?.missingData) {
           setDataCollectionMode(true);
           setMessages((prev) => [
             ...prev,
