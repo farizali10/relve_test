@@ -145,19 +145,59 @@ If you've collected all the data, set nextQuestion to null.
         ? response.data[0]?.generated_text?.trim() || "{}"
         : response.data;
       
-      // Extract JSON from the response
-      const jsonMatch = output.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        aiResponse = JSON.parse(jsonMatch[0]);
+      console.log("Raw AI response:", JSON.stringify(output));
+      
+      // More robust JSON extraction
+      let jsonString = "";
+      
+      if (typeof output === 'object') {
+        // If it's already an object, use it directly
+        aiResponse = output;
+      } else if (typeof output === 'string') {
+        // Look for JSON object in the string
+        const startIdx = output.indexOf('{');
+        const endIdx = output.lastIndexOf('}');
+        
+        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+          jsonString = output.substring(startIdx, endIdx + 1);
+          
+          // Clean the JSON string - remove any invalid characters
+          jsonString = jsonString.replace(/[\u0000-\u001F\u007F-\u009F]/g, "");
+          
+          try {
+            aiResponse = JSON.parse(jsonString);
+          } catch (innerError) {
+            console.error("Failed to parse extracted JSON:", innerError);
+            console.error("Extracted JSON string:", jsonString);
+            
+            // Fallback to a default response
+            aiResponse = {
+              extractedData: null,
+              nextQuestion: {
+                dataType: "retry",
+                question: "I'm having trouble understanding. Could you please provide the information again?"
+              },
+              conversationalResponse: "I'm having trouble setting up your business strategy data. Please try again later."
+            };
+          }
+        } else {
+          throw new Error("No JSON object found in AI response");
+        }
       } else {
-        throw new Error("Could not parse JSON from AI response");
+        throw new Error("Unexpected AI response format");
       }
     } catch (parseError) {
       console.error("Error parsing AI response:", parseError);
-      return NextResponse.json({ 
-        message: "Failed to parse AI response", 
-        error: parseError.message 
-      }, { status: 500 });
+      
+      // Provide a fallback response
+      aiResponse = {
+        extractedData: null,
+        nextQuestion: {
+          dataType: "retry",
+          question: "I'm having trouble understanding. Could you please provide the information again?"
+        },
+        conversationalResponse: "I'm having trouble setting up your business strategy data. Please try again later."
+      };
     }
 
     // If we extracted data, save it
