@@ -607,27 +607,19 @@ export async function POST(request) {
       });
     }
     
-    // Use AI to extract the actual value from natural language responses
+    // Use LangGraph-based data extractor for intelligent extraction
     let extractedValue;
     
     try {
-      // Call the AI extraction endpoint
-      const extractionResponse = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL || ''}/api/extract-data`,
-        { dataType, userResponse: value },
-        {
-          headers: { 
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json"
-          }
-        }
-      );
+      // Import the data extractor dynamically to avoid server/client mismatch
+      const { extractDataWithGraph } = await import('@/lib/langgraph/dataExtractor');
       
-      extractedValue = extractionResponse.data.extractedData;
-      console.log("AI extracted data:", extractedValue);
+      // Extract data using the graph-based approach
+      extractedValue = await extractDataWithGraph(dataType, value, token);
+      console.log("LangGraph extracted data:", extractedValue);
     } catch (extractionError) {
-      console.error("Error using AI extraction:", extractionError);
-      // Fall back to regex extraction if AI extraction fails
+      console.error("Error using LangGraph extraction:", extractionError);
+      // Fall back to regex extraction if LangGraph extraction fails
       extractedValue = extractValueFromResponse(dataType, value);
     }
 
