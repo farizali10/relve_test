@@ -76,10 +76,15 @@ export default function AIChatPage() {
               strategyResponse.data.missingData.length > 0) {
             // We have organization data but need business strategy data
             setDataCollectionMode(true);
-            setCurrentQuestion(strategyResponse.data.missingData[0]);
+            setCurrentQuestion("businessStrategyIntro");
             
-            // Start business strategy data collection
-            startBusinessStrategyCollection(strategyResponse.data.missingData[0]);
+            // First show an introduction message for business strategy data collection
+            setMessages([
+              {
+                from: "bot",
+                text: "Before I can answer your questions, I need more information about your business strategy. Missing data: organizational problems, user & organizational strategy, unique value proposition, solution & distribution strategy, management & systems strategy, business outcomes, cost structure, people strategy"
+              }
+            ]);
           } else {
             // All data is present, show welcome message
             setMessages([
@@ -102,8 +107,16 @@ export default function AIChatPage() {
             if (createResponse.data.missingData && createResponse.data.missingData.length > 0) {
               // Start business strategy data collection
               setDataCollectionMode(true);
-              setCurrentQuestion(createResponse.data.missingData[0]);
-              startBusinessStrategyCollection(createResponse.data.missingData[0]);
+              setCurrentQuestion("businessStrategyIntro");
+              
+              // First show an introduction message for business strategy data collection
+              setMessages(prevMessages => [
+                ...prevMessages,
+                {
+                  from: "bot",
+                  text: "Before I can answer your questions, I need more information about your business strategy. Missing data: organizational problems, user & organizational strategy, unique value proposition, solution & distribution strategy, management & systems strategy, business outcomes, cost structure, people strategy"
+                }
+              ]);
               return;
             }
           } catch (createError) {
@@ -406,6 +419,23 @@ export default function AIChatPage() {
         "solutionStrategy", "managementStrategy", "businessOutcomes", 
         "costStructure", "peopleStrategy"
       ];
+      
+      // Special handling for the business strategy introduction message
+      if (response.toLowerCase() === "okay" && currentQuestion === "businessStrategyIntro") {
+        // Start with the first business strategy data type
+        const token = Cookies.get("token");
+        const { data } = await axios.get("/api/business-strategy", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        
+        if (data.missingData && data.missingData.length > 0) {
+          const firstMissingType = data.missingData[0];
+          setCurrentQuestion(firstMissingType);
+          startBusinessStrategyCollection(firstMissingType);
+        }
+        setLoading(false);
+        return;
+      }
       
       if (businessStrategyDataTypes.includes(currentQuestion)) {
         // Process business strategy data
