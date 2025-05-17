@@ -524,6 +524,88 @@ export async function POST(request) {
       );
     }
     
+    // Special case for initialization
+    if (dataType === "init") {
+      // Just create the document if it doesn't exist and return missing data
+      let strategyData = await BusinessStrategy.findOne({ user: userId });
+      if (!strategyData) {
+        strategyData = await BusinessStrategy.create({
+          user: userId,
+          organizationProblems: [],
+          userStrategy: {
+            targetSegments: "",
+            growthPlans: ""
+          },
+          valueProposition: "",
+          solutionStrategy: {
+            solution: "",
+            distributionStrategy: ""
+          },
+          managementStrategy: "",
+          businessOutcomes: {
+            revenueTargets: "",
+            timeToHire: "",
+            retentionGoals: ""
+          },
+          costStructure: {
+            budgetPerDepartment: "",
+            headcountCaps: ""
+          },
+          peopleStrategy: {
+            criticalRoles: "",
+            skillPriorities: "",
+            benchStrength: ""
+          }
+        });
+      }
+      
+      // Determine what data is missing
+      const missingData = [];
+      
+      if (strategyData.organizationProblems.length === 0) {
+        missingData.push("organizationProblems");
+      }
+      
+      if (!strategyData.userStrategy.targetSegments || !strategyData.userStrategy.growthPlans) {
+        missingData.push("userStrategy");
+      }
+      
+      if (!strategyData.valueProposition) {
+        missingData.push("valueProposition");
+      }
+      
+      if (!strategyData.solutionStrategy.solution || !strategyData.solutionStrategy.distributionStrategy) {
+        missingData.push("solutionStrategy");
+      }
+      
+      if (!strategyData.managementStrategy) {
+        missingData.push("managementStrategy");
+      }
+      
+      if (!strategyData.businessOutcomes.revenueTargets || 
+          !strategyData.businessOutcomes.timeToHire || 
+          !strategyData.businessOutcomes.retentionGoals) {
+        missingData.push("businessOutcomes");
+      }
+      
+      if (!strategyData.costStructure.budgetPerDepartment || !strategyData.costStructure.headcountCaps) {
+        missingData.push("costStructure");
+      }
+      
+      if (!strategyData.peopleStrategy.criticalRoles || 
+          !strategyData.peopleStrategy.skillPriorities || 
+          !strategyData.peopleStrategy.benchStrength) {
+        missingData.push("peopleStrategy");
+      }
+      
+      return NextResponse.json({
+        message: "Business strategy document initialized",
+        strategyData,
+        missingData,
+        hasOrganizationData: true
+      });
+    }
+    
     // Extract the actual value from natural language responses
     const extractedValue = extractValueFromResponse(dataType, value);
 

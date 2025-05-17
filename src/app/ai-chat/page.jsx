@@ -48,18 +48,24 @@ export default function AIChatPage() {
   const checkRequiredData = async () => {
     try {
       const token = Cookies.get("token");
-      const { data } = await axios.get("/api/check-data", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
       
-      if (data.missingData && data.missingData.length > 0) {
-        setDataCollectionMode(true);
-        setDataRequirements(data.dataRequirements);
+      // First check if organization data exists
+      try {
+        const { data } = await axios.get("/api/check-data", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         
-        // Start the guided data collection process
-        startDataCollection(data.missingData[0]);
-      } else {
-        // Check if business strategy data is needed
+        if (data.missingData && data.missingData.length > 0) {
+          // Organization data is missing, start collecting it
+          setDataCollectionMode(true);
+          setDataRequirements(data.dataRequirements);
+          
+          // Start the guided data collection process
+          startDataCollection(data.missingData[0]);
+          return;
+        }
+        
+        // Organization data is complete, now check business strategy data
         try {
           const strategyResponse = await axios.get("/api/business-strategy", {
             headers: { Authorization: `Bearer ${token}` },
@@ -85,7 +91,26 @@ export default function AIChatPage() {
           }
         } catch (strategyError) {
           console.error("Error checking business strategy data:", strategyError);
-          // All basic data is present, show welcome message
+          
+          // Try to create a new business strategy document and start collection
+          try {
+            const createResponse = await axios.post("/api/business-strategy", 
+              { dataType: "init", value: "" },
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            
+            if (createResponse.data.missingData && createResponse.data.missingData.length > 0) {
+              // Start business strategy data collection
+              setDataCollectionMode(true);
+              setCurrentQuestion(createResponse.data.missingData[0]);
+              startBusinessStrategyCollection(createResponse.data.missingData[0]);
+              return;
+            }
+          } catch (createError) {
+            console.error("Error creating business strategy document:", createError);
+          }
+          
+          // Fall back to basic welcome message
           setMessages([
             {
               from: "bot",
@@ -93,6 +118,19 @@ export default function AIChatPage() {
             },
           ]);
         }
+      } catch (orgError) {
+        console.error("Error checking organization data:", orgError);
+        // Show welcome message with a note about missing organization data
+        setMessages([
+          {
+            from: "bot",
+            text: "Hello! I'm your AI assistant. I need some information about your organization before I can assist you fully. Let's start by setting up your organization details.",
+          },
+        ]);
+        
+        // Start organization data collection with a default field
+        setDataCollectionMode(true);
+        startDataCollection("organizationName");
       }
     } catch (error) {
       console.error("Error checking required data:", error);
@@ -235,6 +273,7 @@ export default function AIChatPage() {
   // Function to start business strategy data collection
   const startBusinessStrategyCollection = (dataType) => {
     setCurrentQuestion(dataType);
+    setDataCollectionMode(true);
     
     let questionText = "";
     switch (dataType) {
@@ -266,7 +305,8 @@ export default function AIChatPage() {
         questionText = "I need more information about your business strategy. What would you like to tell me?";
     }
     
-    setMessages([
+    setMessages((prev) => [
+      ...prev,
       {
         from: "bot",
         text: questionText,
@@ -499,6 +539,8 @@ export default function AIChatPage() {
           },
         ]);
       } catch (error) {
+        console.error("AI Chat Error:", error.response?.data);
+        
         // If the error indicates missing business strategy data
         if (error.response?.status === 400 && error.response?.data?.missingBusinessStrategyData) {
           setDataCollectionMode(true);
