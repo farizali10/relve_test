@@ -18,7 +18,6 @@ export default function ChartPage() {
     (state) => state.organization
   );
 
-  // Fetch organization on mount if not loaded yet
   useEffect(() => {
     if (!isAuth) {
       router.replace("/login");
@@ -29,7 +28,6 @@ export default function ChartPage() {
     }
   }, [isAuth, organization, loading, error, dispatch, router]);
 
-  // If user has no organization, redirect to org creation page
   useEffect(() => {
     if (!loading && isAuth && !organization && !error) {
       router.replace("/organization");
@@ -49,9 +47,12 @@ export default function ChartPage() {
     return <p className="p-8 text-center text-red-600">Error: {error}</p>;
   if (!organization) return null;
 
-  // Optional: Check if the org belongs to the user (should always be true if backend is correct)
   if (organization.user && user && organization.user !== user._id) {
-    return <p className="p-8 text-center text-red-600">Organization not found for this user.</p>;
+    return (
+      <p className="p-8 text-center text-red-600">
+        Organization not found for this user.
+      </p>
+    );
   }
 
   return (
@@ -62,36 +63,37 @@ export default function ChartPage() {
           <h1 className="text-3xl font-bold">Organization Details</h1>
         </div>
 
-      <div className="border border-gray-300 rounded-lg p-6 w-full max-w-md text-center shadow-md bg-gray-50">
-        <div className="text-2xl font-semibold">
-          {organization.name || "N/A"}
-        </div>
-        <div className="text-xl text-gray-600 mt-2">
-          Founded: {organization.yearFounded || "N/A"}
-        </div>
-        <div className="mt-4">
-          <strong>Industry:</strong> {organization.industry || "N/A"}
-        </div>
-        <div>
-          <strong>Company Size:</strong> {organization.companySize || "N/A"}
-        </div>
-        <div>
-          <strong>Location:</strong> {organization.city}, {organization.country}
-        </div>
-        <div>
-          <strong>Organization Type:</strong> {organization.organizationType}
-        </div>
-        <div>
-          <strong>Offices:</strong> {organization.numberOfOffices}
-        </div>
-        <div>
-          <strong>HR Tools:</strong> {organization.hrToolsUsed}
-        </div>
-        <div>
-          <strong>Hiring Level:</strong> {organization.hiringLevel}
-        </div>
-        <div>
-          <strong>Work Model:</strong> {organization.workModel}
+        <div className="border border-gray-300 rounded-lg p-6 w-full max-w-md text-center shadow-md bg-gray-50">
+          <div className="text-2xl font-semibold">
+            {organization.name || "N/A"}
+          </div>
+          <div className="text-xl text-gray-600 mt-2">
+            Founded: {organization.yearFounded || "N/A"}
+          </div>
+          <div className="mt-4">
+            <strong>Industry:</strong> {organization.industry || "N/A"}
+          </div>
+          <div>
+            <strong>Company Size:</strong> {organization.companySize || "N/A"}
+          </div>
+          <div>
+            <strong>Location:</strong> {organization.city}, {organization.country}
+          </div>
+          <div>
+            <strong>Organization Type:</strong> {organization.organizationType}
+          </div>
+          <div>
+            <strong>Offices:</strong> {organization.numberOfOffices}
+          </div>
+          <div>
+            <strong>HR Tools:</strong> {organization.hrToolsUsed}
+          </div>
+          <div>
+            <strong>Hiring Level:</strong> {organization.hiringLevel}
+          </div>
+          <div>
+            <strong>Work Model:</strong> {organization.workModel}
+          </div>
         </div>
       </div>
     </div>

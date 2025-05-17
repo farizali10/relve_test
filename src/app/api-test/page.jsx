@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import axios from "axios";
 import Navigation from "@/components/Navigation";
 
@@ -43,7 +43,8 @@ export default function ApiTestPage() {
       <Navigation />
       <div className="flex-1 p-8 flex flex-col">
         <h1 className="text-2xl font-bold mb-6">API Connection Test</h1>
-        
+
+        {/* Hugging Face API Key Test */}
         <div className="mb-8 p-4 border border-gray-200 rounded-lg">
           <h2 className="text-xl font-semibold mb-4">Hugging Face API Key Test</h2>
           <button
@@ -53,7 +54,7 @@ export default function ApiTestPage() {
           >
             {loading ? "Testing..." : "Test API Key"}
           </button>
-          
+
           {apiStatus && (
             <div className={`p-4 rounded-lg ${apiStatus.status === "success" ? "bg-green-100" : "bg-red-100"}`}>
               <h3 className="font-semibold">{apiStatus.message}</h3>
@@ -62,16 +63,18 @@ export default function ApiTestPage() {
                 {apiStatus.apiKeyExists && (
                   <p><strong>API Key Valid:</strong> {apiStatus.apiKeyValid ? "Yes" : "No"}</p>
                 )}
-                {apiStatus.response && (
+                {apiStatus.fullResponse && (
                   <div className="mt-2">
-                    <p><strong>Model Response:</strong></p>
-                    <p className="bg-white p-2 rounded mt-1">{apiStatus.response}</p>
+                    <p><strong>Full Model Response:</strong></p>
+                    <pre className="bg-white p-3 rounded mt-1 whitespace-pre-wrap break-words text-sm">
+                      {JSON.stringify(apiStatus.fullResponse, null, 2)}
+                    </pre>
                   </div>
                 )}
               </div>
             </div>
           )}
-          
+
           {error && (
             <div className="p-4 bg-red-100 rounded-lg">
               <h3 className="font-semibold">Error: {error.message}</h3>
@@ -79,7 +82,8 @@ export default function ApiTestPage() {
             </div>
           )}
         </div>
-        
+
+        {/* Llama Model Access Test */}
         <div className="p-4 border border-gray-200 rounded-lg">
           <h2 className="text-xl font-semibold mb-4">Llama Model Access Test</h2>
           <button
@@ -89,14 +93,16 @@ export default function ApiTestPage() {
           >
             {llamaLoading ? "Testing..." : "Test Llama Access"}
           </button>
-          
+
           {llamaStatus && (
             <div className={`p-4 rounded-lg ${llamaStatus.status === "success" ? "bg-green-100" : "bg-red-100"}`}>
               <h3 className="font-semibold">{llamaStatus.message}</h3>
-              {llamaStatus.response && (
+              {llamaStatus.fullResponse && (
                 <div className="mt-2">
-                  <p><strong>Model Response:</strong></p>
-                  <p className="bg-white p-2 rounded mt-1">{llamaStatus.response}</p>
+                  <p><strong>Full Model Response:</strong></p>
+                  <pre className="bg-white p-3 rounded mt-1 whitespace-pre-wrap break-words text-sm">
+                    {JSON.stringify(llamaStatus.fullResponse, null, 2)}
+                  </pre>
                 </div>
               )}
               {llamaStatus.error && (
@@ -107,7 +113,7 @@ export default function ApiTestPage() {
               )}
             </div>
           )}
-          
+
           {llamaError && (
             <div className="p-4 bg-red-100 rounded-lg">
               <h3 className="font-semibold">Error: {llamaError.message}</h3>
@@ -115,7 +121,8 @@ export default function ApiTestPage() {
             </div>
           )}
         </div>
-        
+
+        {/* Troubleshooting */}
         <div className="mt-8 p-4 border border-gray-200 rounded-lg">
           <h2 className="text-xl font-semibold mb-4">Troubleshooting Steps</h2>
           <ol className="list-decimal pl-5 space-y-2">

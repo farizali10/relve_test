@@ -23,7 +23,7 @@ const nextConfig = {
     ];
   },
   serverExternalPackages: ['mongoose'],
-  allowedDevOrigins: ['work-1-qiuppmgyszchbnqp.prod-runtime.all-hands.dev', 'work-2-qiuppmgyszchbnqp.prod-runtime.all-hands.dev'],
+  allowedDevOrigins: ['work-1-ankuibocwndwlisu.prod-runtime.all-hands.dev', 'work-2-ankuibocwndwlisu.prod-runtime.all-hands.dev'],
 };
 
 module.exports = nextConfig;
