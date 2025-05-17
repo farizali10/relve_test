@@ -101,6 +101,9 @@ Your task is to:
 4. If the user's message doesn't contain the information you need, ask for it specifically
 5. If the user seems confused or asks for help, explain what information you need and why
 
+IMPORTANT: You must ONLY return a valid JSON object with no additional text, code, or explanation before or after it.
+Do not include any markdown code blocks, Python code, or any other text outside the JSON object.
+
 Return your response in the following JSON format:
 {
   "extractedData": {
@@ -116,18 +119,25 @@ Return your response in the following JSON format:
 
 If you can't extract any data, set extractedData to null.
 If you've collected all the data, set nextQuestion to null.
+
+Remember: Return ONLY the JSON object with no additional text, code, or explanation.
 `.trim();
 
     const apiKey = process.env.HUGGINGFACE_API_KEY;
 
+    // Add a system message to enforce JSON output
+    const systemPrompt = "You are a helpful AI assistant that ONLY responds with valid JSON objects. Never include explanations, markdown, or code blocks in your responses.";
+    
     const response = await axios.post(
       "https://api-inference.huggingface.co/models/meta-llama/Llama-3.1-8B-Instruct",
       {
-        inputs: prompt,
+        inputs: `<|system|>\n${systemPrompt}\n<|user|>\n${prompt}\n<|assistant|>`,
         parameters: {
           max_new_tokens: 800,
-          temperature: 0.7,
-          return_full_text: false
+          temperature: 0.5, // Lower temperature for more predictable output
+          return_full_text: false,
+          do_sample: true,
+          top_p: 0.9
         }
       },
       {
@@ -141,50 +151,82 @@ If you've collected all the data, set nextQuestion to null.
     // Parse the AI response
     let aiResponse;
     try {
-      const output = Array.isArray(response.data)
-        ? response.data[0]?.generated_text?.trim() || "{}"
-        : response.data;
+      // Get the raw response text
+      let output = "";
+      if (Array.isArray(response.data)) {
+        output = response.data[0]?.generated_text?.trim() || "{}";
+      } else if (typeof response.data === 'object' && response.data.generated_text) {
+        output = response.data.generated_text.trim();
+      } else if (typeof response.data === 'string') {
+        output = response.data.trim();
+      } else {
+        output = JSON.stringify(response.data);
+      }
       
       console.log("Raw AI response:", JSON.stringify(output));
       
       // More robust JSON extraction
-      let jsonString = "";
-      
-      if (typeof output === 'object') {
-        // If it's already an object, use it directly
+      if (typeof output === 'object' && !Array.isArray(output)) {
+        // If it's already a valid object, use it directly
         aiResponse = output;
-      } else if (typeof output === 'string') {
-        // Look for JSON object in the string
-        const startIdx = output.indexOf('{');
-        const endIdx = output.lastIndexOf('}');
+      } else {
+        // Extract JSON from the response text
+        // First, try to find JSON between curly braces
+        let jsonString = "";
+        let jsonRegex = /\{(?:[^{}]|(?:\{(?:[^{}]|(?:\{[^{}]*\}))*\}))*\}/g;
+        let matches = output.match(jsonRegex);
         
-        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-          jsonString = output.substring(startIdx, endIdx + 1);
+        if (matches && matches.length > 0) {
+          // Find the largest match which is likely the complete JSON
+          jsonString = matches.reduce((a, b) => a.length > b.length ? a : b);
           
-          // Clean the JSON string - remove any invalid characters
-          jsonString = jsonString.replace(/[\u0000-\u001F\u007F-\u009F]/g, "");
-          
+          // Clean the JSON string
+          jsonString = jsonString
+            .replace(/[\u0000-\u001F\u007F-\u009F]/g, "") // Remove control characters
+            .replace(/\\n/g, " ")                         // Replace newlines with spaces
+            .replace(/\\"/g, '"')                         // Fix escaped quotes
+            .replace(/\\t/g, " ")                         // Replace tabs with spaces
+            .replace(/\\/g, "\\\\");                      // Escape backslashes
+            
           try {
             aiResponse = JSON.parse(jsonString);
           } catch (innerError) {
             console.error("Failed to parse extracted JSON:", innerError);
             console.error("Extracted JSON string:", jsonString);
             
-            // Fallback to a default response
-            aiResponse = {
-              extractedData: null,
-              nextQuestion: {
-                dataType: "retry",
-                question: "I'm having trouble understanding. Could you please provide the information again?"
-              },
-              conversationalResponse: "I'm having trouble setting up your business strategy data. Please try again later."
-            };
+            // Try to fix common JSON issues
+            try {
+              // Replace Python-style single quotes with double quotes
+              const fixedJson = jsonString
+                .replace(/'/g, '"')
+                .replace(/None/g, 'null')
+                .replace(/True/g, 'true')
+                .replace(/False/g, 'false');
+              
+              aiResponse = JSON.parse(fixedJson);
+            } catch (fixError) {
+              // Fallback to a default response
+              aiResponse = {
+                extractedData: null,
+                nextQuestion: {
+                  dataType: "retry",
+                  question: "I'm having trouble understanding. Could you please provide the information again?"
+                },
+                conversationalResponse: "I'm having trouble setting up your business strategy data. Please try again later."
+              };
+            }
           }
         } else {
-          throw new Error("No JSON object found in AI response");
+          // If no JSON object found, create a default response
+          aiResponse = {
+            extractedData: null,
+            nextQuestion: {
+              dataType: "retry",
+              question: "I'm having trouble understanding. Could you please provide the information again?"
+            },
+            conversationalResponse: "I'm having trouble setting up your business strategy data. Please try again later."
+          };
         }
-      } else {
-        throw new Error("Unexpected AI response format");
       }
     } catch (parseError) {
       console.error("Error parsing AI response:", parseError);
