@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { connectDb } from "@/connectDb";
 import jwt from "jsonwebtoken";
-import axios from "axios";
+import { AIProviderFactory } from "@/lib/ai-providers";
 
 export async function POST(request) {
   try {
@@ -171,42 +171,24 @@ export async function POST(request) {
     // Add instructions for the AI to format the response
     prompt += `\n\nYour response should be valid JSON that can be parsed directly. Do not include any explanations, just the JSON.`;
 
-    // Call the AI model to extract the data
-    const apiKey = process.env.HUGGINGFACE_API_KEY;
+    // Get the best available AI provider
+    const aiProvider = await AIProviderFactory.getBestAvailableProvider({
+      systemPrompt: "You are a helpful AI assistant that ONLY responds with valid JSON. Never include explanations or text outside the JSON."
+    });
     
-    const response = await axios.post(
-      "https://api-inference.huggingface.co/models/meta-llama/Llama-3.1-8B-Instruct",
-      {
-        inputs: prompt,
-        parameters: {
-          max_new_tokens: 500,
-          temperature: 0.2, // Lower temperature for more deterministic extraction
-          return_full_text: false
-        }
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json"
-        }
-      }
-    );
+    console.log(`Using ${aiProvider.constructor.name} for data extraction`);
     
-    // Process the AI response
+    // Generate and parse the AI response
     let extractedData;
     try {
-      const aiResponse = Array.isArray(response.data)
-        ? response.data[0]?.generated_text?.trim()
-        : response.data;
-        
-      // Try to extract JSON from the response
-      const jsonMatch = aiResponse.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-      if (jsonMatch) {
-        extractedData = JSON.parse(jsonMatch[0]);
-      } else {
-        // If no JSON found, use the raw text
-        extractedData = aiResponse;
-      }
+      // Use the provider to get a response
+      const rawResponse = await aiProvider.generateResponse(prompt, {
+        temperature: 0.2, // Lower temperature for more deterministic extraction
+        maxTokens: 500
+      });
+      
+      // Parse the response
+      extractedData = aiProvider.parseResponse(rawResponse);
       
       // For simple string responses, ensure we return a string
       if (dataType === "valueProposition" || dataType === "managementStrategy") {
@@ -232,7 +214,10 @@ export async function POST(request) {
       }
       
     } catch (error) {
-      console.error("Error parsing AI response:", error);
+      console.error("Error with AI provider:", error);
+      
+      // Try fallback to regex-based extraction
+      console.log("Falling back to regex-based extraction");
       
       // Fallback extraction based on data type
       if (dataType === "organizationProblems") {
