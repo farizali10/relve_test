@@ -6,6 +6,7 @@ import { Chatbot } from "../../../../models/Chatbot";
 import { Organization } from "../../../../models/Organization";
 import { Department } from "../../../../models/Departments";
 import { BusinessStrategy } from "../../../../models/BusinessStrategy";
+import { AI_PROVIDER } from "@/config/ai-providers";
 
 export async function POST(request) {
   try {
@@ -123,55 +124,124 @@ If you've collected all the data, set nextQuestion to null.
 Remember: Return ONLY the JSON object with no additional text, code, or explanation.
 `.trim();
 
-    const apiKey = process.env.HUGGINGFACE_API_KEY;
-
     // Add a system message to enforce JSON output
     const systemPrompt = "You are a helpful AI assistant that ONLY responds with valid JSON objects. Never include explanations, markdown, or code blocks in your responses.";
     
-    const response = await axios.post(
-      "https://api-inference.huggingface.co/models/meta-llama/Llama-3.1-8B-Instruct",
-      {
-        inputs: `<|system|>\n${systemPrompt}\n<|user|>\n${prompt}\n<|assistant|>`,
-        parameters: {
-          max_new_tokens: 800,
-          temperature: 0.5, // Lower temperature for more predictable output
-          return_full_text: false,
-          do_sample: true,
-          top_p: 0.9
-        }
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json"
-        }
+    // Get the current AI provider configuration
+    const provider = AI_PROVIDER.type;
+    console.log(`Using AI provider: ${provider}`);
+    
+    let response;
+    
+    try {
+      if (provider === 'ollama') {
+        // Format the prompt for Ollama
+        const formattedPrompt = AI_PROVIDER.templates.ollama.system.replace('{system}', systemPrompt) + 
+                               AI_PROVIDER.templates.ollama.user.replace('{user}', prompt);
+        
+        // Call Ollama API
+        response = await axios.post(
+          AI_PROVIDER.endpoints.ollama,
+          {
+            model: AI_PROVIDER.models.ollama,
+            prompt: formattedPrompt,
+            stream: false,
+            options: AI_PROVIDER.parameters.ollama
+          },
+          {
+            headers: {
+              "Content-Type": "application/json"
+            }
+          }
+        );
+      } else {
+        // Default to Hugging Face
+        const apiKey = process.env.HUGGINGFACE_API_KEY;
+        
+        // Format the prompt for Hugging Face
+        const formattedPrompt = AI_PROVIDER.templates.huggingface.system.replace('{system}', systemPrompt)
+                                                                      .replace('{user}', prompt);
+        
+        // Call Hugging Face API
+        response = await axios.post(
+          AI_PROVIDER.endpoints.huggingface,
+          {
+            inputs: formattedPrompt,
+            parameters: AI_PROVIDER.parameters.huggingface
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json"
+            }
+          }
+        );
       }
-    );
+    } catch (apiError) {
+      console.error(`Error calling ${provider} API:`, apiError.message);
+      
+      // If Ollama fails, try falling back to Hugging Face
+      if (provider === 'ollama') {
+        console.log("Falling back to Hugging Face API");
+        const apiKey = process.env.HUGGINGFACE_API_KEY;
+        
+        // Format the prompt for Hugging Face
+        const formattedPrompt = AI_PROVIDER.templates.huggingface.system.replace('{system}', systemPrompt)
+                                                                  .replace('{user}', prompt);
+        
+        // Call Hugging Face API as fallback
+        response = await axios.post(
+          AI_PROVIDER.endpoints.huggingface,
+          {
+            inputs: formattedPrompt,
+            parameters: AI_PROVIDER.parameters.huggingface
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json"
+            }
+          }
+        );
+      } else {
+        // Re-throw the error if we're already using Hugging Face
+        throw apiError;
+      }
+    }
 
     // Parse the AI response
     let aiResponse;
     try {
-      // Get the raw response text
+      // Get the raw response text based on provider
       let output = "";
-      if (Array.isArray(response.data)) {
-        output = response.data[0]?.generated_text?.trim() || "{}";
-      } else if (typeof response.data === 'object' && response.data.generated_text) {
-        output = response.data.generated_text.trim();
-      } else if (typeof response.data === 'string') {
-        output = response.data.trim();
+      
+      if (provider === 'ollama') {
+        // Ollama returns response in a different format
+        output = response.data.response || "{}";
       } else {
-        output = JSON.stringify(response.data);
+        // Hugging Face response format
+        if (Array.isArray(response.data)) {
+          output = response.data[0]?.generated_text?.trim() || "{}";
+        } else if (typeof response.data === 'object' && response.data.generated_text) {
+          output = response.data.generated_text.trim();
+        } else if (typeof response.data === 'string') {
+          output = response.data.trim();
+        } else {
+          output = JSON.stringify(response.data);
+        }
       }
       
-      console.log("Raw AI response:", JSON.stringify(output));
+      console.log(`Raw ${provider} response:`, JSON.stringify(output));
       
-      // More robust JSON extraction
-      if (typeof output === 'object' && !Array.isArray(output)) {
-        // If it's already a valid object, use it directly
-        aiResponse = output;
-      } else {
+      // Try to parse the JSON directly first
+      try {
+        aiResponse = JSON.parse(output);
+        console.log("Successfully parsed JSON directly");
+      } catch (directParseError) {
+        console.log("Direct JSON parsing failed, trying to extract JSON from text");
+        
+        // If direct parsing fails, try to extract JSON from the response
         // Extract JSON from the response text
-        // First, try to find JSON between curly braces
         let jsonString = "";
         let jsonRegex = /\{(?:[^{}]|(?:\{(?:[^{}]|(?:\{[^{}]*\}))*\}))*\}/g;
         let matches = output.match(jsonRegex);
@@ -190,6 +260,7 @@ Remember: Return ONLY the JSON object with no additional text, code, or explanat
             
           try {
             aiResponse = JSON.parse(jsonString);
+            console.log("Successfully parsed extracted JSON");
           } catch (innerError) {
             console.error("Failed to parse extracted JSON:", innerError);
             console.error("Extracted JSON string:", jsonString);
@@ -204,7 +275,9 @@ Remember: Return ONLY the JSON object with no additional text, code, or explanat
                 .replace(/False/g, 'false');
               
               aiResponse = JSON.parse(fixedJson);
+              console.log("Successfully parsed fixed JSON");
             } catch (fixError) {
+              console.error("Failed to parse fixed JSON:", fixError);
               // Fallback to a default response
               aiResponse = {
                 extractedData: null,
@@ -217,6 +290,7 @@ Remember: Return ONLY the JSON object with no additional text, code, or explanat
             }
           }
         } else {
+          console.error("No JSON object found in response");
           // If no JSON object found, create a default response
           aiResponse = {
             extractedData: null,
@@ -227,6 +301,13 @@ Remember: Return ONLY the JSON object with no additional text, code, or explanat
             conversationalResponse: "I'm having trouble setting up your business strategy data. Please try again later."
           };
         }
+      }
+      
+      // Validate the response structure
+      if (!aiResponse.conversationalResponse || 
+          (aiResponse.extractedData === undefined && aiResponse.nextQuestion === undefined)) {
+        console.error("Invalid response structure:", aiResponse);
+        throw new Error("Invalid response structure");
       }
     } catch (parseError) {
       console.error("Error parsing AI response:", parseError);
