@@ -6,6 +6,7 @@ import { Chatbot } from "../../../../models/Chatbot";
 import { Organization } from "../../../../models/Organization";
 import { Department } from "../../../../models/Departments";
 import { BusinessStrategy } from "../../../../models/BusinessStrategy";
+import { User } from "../../../../models/User";
 import { AIProviderFactory } from "@/lib/ai-providers";
 
 export async function POST(request) {
@@ -29,6 +30,7 @@ export async function POST(request) {
     const organization = await Organization.findOne({ user: userId });
     const departments = await Department.find({ user: userId });
     const businessStrategy = await BusinessStrategy.findOne({ user: userId });
+    const user = await User.findById(userId);
 
     // Determine what data we're collecting and what's missing
     const missingOrgData = [];
@@ -124,10 +126,24 @@ If you've collected all the data, set nextQuestion to null.
 Remember: Return ONLY the JSON object with no additional text, code, or explanation.
 `.trim();
 
-    // Get the best available AI provider
-    const aiProvider = await AIProviderFactory.getBestAvailableProvider({
-      systemPrompt: "You are a helpful AI assistant that ONLY responds with valid JSON objects. Never include explanations, markdown, or code blocks in your responses."
-    });
+    // Get the user's preferred AI provider or the best available one
+    let aiProvider;
+    
+    // Check if the user has a preferred provider
+    const preferredProvider = user?.preferences?.aiProvider || "auto";
+    
+    if (preferredProvider === "auto") {
+      // Use the best available provider
+      aiProvider = await AIProviderFactory.getBestAvailableProvider({
+        systemPrompt: "You are a helpful AI assistant that ONLY responds with valid JSON objects. Never include explanations, markdown, or code blocks in your responses."
+      });
+    } else {
+      // Use the user's preferred provider
+      aiProvider = AIProviderFactory.getProvider({
+        provider: preferredProvider,
+        systemPrompt: "You are a helpful AI assistant that ONLY responds with valid JSON objects. Never include explanations, markdown, or code blocks in your responses."
+      });
+    }
     
     // Generate and parse the AI response
     let aiResponse;

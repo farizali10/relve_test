@@ -5,6 +5,7 @@ import Cookies from "js-cookie";
 import { useRouter } from "next/navigation";
 import { FaUser, FaRobot, FaPaperPlane } from "react-icons/fa";
 import { Spinner } from "@/components/Spinner";
+import AIProviderConfig from "@/components/AIProviderConfig";
 
 export default function AIChatPage() {
   const [messages, setMessages] = useState([]);
@@ -391,6 +392,9 @@ export default function AIChatPage() {
           <FaPaperPlane />
         </button>
       </form>
+      
+      {/* AI Provider Configuration */}
+      <AIProviderConfig />
     </div>
   );
 }
